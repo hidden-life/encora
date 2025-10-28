@@ -28,9 +28,13 @@ target_link_libraries(encora PRIVATE
 
 encora_set_common_warnings(encora)
 
-set_target_properties(encora PROPERTIES
-        WIN32_EXECUTABLE TRUE
-        MACOSX_BUNDLE TRUE
-)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set_target_properties(encora PROPERTIES WIN32_EXECUTABLE FALSE)
+else ()
+    set_target_properties(encora PROPERTIES
+            WIN32_EXECUTABLE TRUE
+            MACOSX_BUNDLE TRUE
+    )
+endif ()
 
 install(TARGETS encora)

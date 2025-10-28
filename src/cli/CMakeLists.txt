@@ -1,4 +1,6 @@
 add_executable(encora_cli
+        main_cli.cpp
+
         CLI.cpp
         CLIOptions.cpp
 )
