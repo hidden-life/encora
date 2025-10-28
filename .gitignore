@@ -1,0 +1,38 @@
+# Build directories
+cmake-build-*/
+build/
+out/
+dist/
+
+# CLion / JetBrains
+.idea/
+.vscode
+
+# CMake cache
+CMakeCache.txt
+CMakeFiles/
+Testing/
+CTestTestfile.cmake
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+# Generated headers/binaries
+*.exe
+*.dll
+*.pdb
+*.obj
+*.o
+*.a
+*.lib
+*.so
+*.dylib
+*.qrc.depends
+
+# Qt user files
+*.pro.user
+*.qmake.stash
+
+# Crash dumps / logs
+*.log
+*.dmp
