@@ -21,6 +21,8 @@ include(cmake/ConfigCompilerWarnings.cmake)
 
 # Optional/future static analyzers, clang-tidy integration
 include(cmake/ConfigStaticAnalysis.cmake OPTIONAL)
+# Install libsodium
+include(cmake/FindLibsodium.cmake)
 
 # Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

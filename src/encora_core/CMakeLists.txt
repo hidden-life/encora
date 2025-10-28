@@ -21,7 +21,10 @@ target_include_directories(encora_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/core
 )
 
-target_link_libraries(encora_core PUBLIC spdlog::spdlog)
+target_link_libraries(encora_core PUBLIC
+        spdlog::spdlog
+        sodium
+)
 
 # Platform-specific defines
 if (WIN32)
