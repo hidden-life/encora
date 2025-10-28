@@ -25,7 +25,7 @@ namespace EncoraLogger {
             m_logger = std::make_shared<spdlog::logger>("Encora", sinks.begin(), sinks.end());
             spdlog::register_logger(m_logger);
 
-            m_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e][%l][%n] %v");
+            m_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e][%n][%l] %v");
             m_logger->set_level(spdlog::level::debug);
 
             m_isInitialized = true;

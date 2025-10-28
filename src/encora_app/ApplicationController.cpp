@@ -10,7 +10,7 @@ ApplicationController::~ApplicationController() {
 
 bool ApplicationController::tryUnlock(const QString &password) {
     bool isOk = m_vault.unlock(password.toStdString());
-    if (!isOk) {
+    if (isOk) {
         EncoraLogger::Logger::log(EncoraLogger::Level::Info, "Vault unlocked from GUI.");
     } else {
         EncoraLogger::Logger::log(EncoraLogger::Level::Warn, "Failed unlock attempt (GUI).");
