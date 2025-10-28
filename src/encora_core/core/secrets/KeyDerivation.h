@@ -1,0 +1,8 @@
+#ifndef CORE_SECRETS_KEY_DERIVATION_H
+#define CORE_SECRETS_KEY_DERIVATION_H
+
+class KeyDerivation {
+
+};
+
+#endif //CORE_SECRETS_KEY_DERIVATION_H

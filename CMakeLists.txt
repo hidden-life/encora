@@ -1,51 +1,39 @@
-cmake_minimum_required(VERSION 3.31)
-project(encora)
+cmake_minimum_required(VERSION 3.20)
 
+# Project metadata
+project(Encora VERSION 0.1.0 LANGUAGES CXX DESCRIPTION "Encora - local encrypted vault for secrets, passwords, files and notes.")
+
+# Modern C++ data
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_PREFIX_PATH "C:/Qt/6.9.0/mingw_64")
+# Default to Release if not specified
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE  Release CACHE STRING "Build type" FORCE)
+endif ()
 
-find_package(Qt6 COMPONENTS
-        Core
-        Gui
-        Widgets
-        REQUIRED)
+# Custom CMake modules
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-add_executable(encora main.cpp)
-target_link_libraries(encora
-        Qt::Core
-        Qt::Gui
-        Qt::Widgets
+# Enable stricter warnings early
+include(cmake/ConfigCompilerWarnings.cmake)
+
+# Optional/future static analyzers, clang-tidy integration
+include(cmake/ConfigStaticAnalysis.cmake OPTIONAL)
+
+# Generate a header with build/version information for runtime about dialog etc.
+configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/encora_core/core/utils/BuildInfo.h.in
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/BuildInfo.h
+        @ONLY
 )
 
-if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(DEBUG_SUFFIX)
-    if (MSVC AND CMAKE_BUILD_TYPE MATCHES "Debug")
-        set(DEBUG_SUFFIX "d")
-    endif ()
-    set(QT_INSTALL_PATH "${CMAKE_PREFIX_PATH}")
-    if (NOT EXISTS "${QT_INSTALL_PATH}/bin")
-        set(QT_INSTALL_PATH "${QT_INSTALL_PATH}/..")
-        if (NOT EXISTS "${QT_INSTALL_PATH}/bin")
-            set(QT_INSTALL_PATH "${QT_INSTALL_PATH}/..")
-        endif ()
-    endif ()
-    if (EXISTS "${QT_INSTALL_PATH}/plugins/platforms/qwindows${DEBUG_SUFFIX}.dll")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins/platforms/")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                "${QT_INSTALL_PATH}/plugins/platforms/qwindows${DEBUG_SUFFIX}.dll"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins/platforms/")
-    endif ()
-    foreach (QT_LIB Core Gui Widgets)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                "${QT_INSTALL_PATH}/bin/Qt6${QT_LIB}${DEBUG_SUFFIX}.dll"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
-    endforeach (QT_LIB)
-endif ()
+# Global include path for generated headers
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+# Add subdirectories/subprojects
+add_subdirectory(src/encora_core)
+add_subdirectory(src/encora_app)
+add_subdirectory(src/cli)
+add_subdirectory(tests)
