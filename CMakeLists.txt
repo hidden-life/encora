@@ -22,18 +22,19 @@ include(cmake/ConfigCompilerWarnings.cmake)
 # Optional/future static analyzers, clang-tidy integration
 include(cmake/ConfigStaticAnalysis.cmake OPTIONAL)
 
-# Generate a header with build/version information for runtime about dialog etc.
-configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/encora_core/core/utils/BuildInfo.h.in
-        ${CMAKE_CURRENT_BINARY_DIR}/generated/BuildInfo.h
-        @ONLY
-)
+# Output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# Global include path for generated headers
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Add subdirectories/subprojects
 add_subdirectory(src/encora_core)
 add_subdirectory(src/encora_app)
 add_subdirectory(src/cli)
 add_subdirectory(tests)
+
+# Future rules
+message(STATUS "Encora ${PROJECT_VERSION} configured for ${CMAKE_SYSTEM_NAME}")
