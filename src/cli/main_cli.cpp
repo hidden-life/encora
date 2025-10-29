@@ -11,8 +11,7 @@ int main(int argc, char *argv[]) {
     VaultManager vault;
 
     if (opts.command == "unlock") {
-        bool isOk = vault.unlock(opts.argument);
-        if (isOk) {
+        if (vault.unlock(opts.argument)) {
             std::cout << "Vault unlocked!" << std::endl;
             EncoraLogger::Logger::log(EncoraLogger::Level::Info, "Vault unlocked via CLI.");
         } else {

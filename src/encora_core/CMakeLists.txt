@@ -7,13 +7,34 @@ FetchContent_Declare(spdlog
 )
 FetchContent_MakeAvailable(spdlog)
 
-add_library(encora_core STATIC
+set(SOURCES
         core/VaultManager.cpp
         core/CryptoEngine.cpp
         core/secrets/KeyDerivation.cpp
+        core/secrets/KeyWrap.cpp
         core/utils/Logger.cpp
         storage/LocalEncryptedStorage.cpp
+
+        VaultMetadataIO.cpp
 )
+
+set(HEADERS
+        core/VaultManager.h
+        core/VaultMetadata.h
+        core/CryptoEngine.h
+        core/secrets/KeyDerivation.h
+        core/secrets/KeyWrap.h
+        core/secrets/SecureWiper.h
+        core/utils/Logger.h
+        core/utils/Version.h
+        storage/LocalEncryptedStorage.h
+        storage/StorageBackend.h
+        storage/StorageError.h
+
+        VaultMetadataIO.h
+)
+
+add_library(encora_core STATIC ${SOURCES} ${HEADERS})
 
 target_include_directories(encora_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
