@@ -16,6 +16,8 @@ set(SOURCES
         core/utils/Base64.cpp
         core/utils/HMAC.cpp
         storage/LocalEncryptedStorage.cpp
+        storage/StorageIndex.cpp
+        storage/EncryptedVaultStorage.cpp
 
         VaultMetadataIO.cpp
 )
@@ -34,6 +36,9 @@ set(HEADERS
         storage/LocalEncryptedStorage.h
         storage/StorageBackend.h
         storage/StorageError.h
+        storage/StorageIndex.h
+        storage/StorageRecord.h
+        storage/EncryptedVaultStorage.h
 
         VaultMetadataIO.h
 )

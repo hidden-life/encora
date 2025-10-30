@@ -1,0 +1,8 @@
+#ifndef CORE_STORAGE_STORAGE_INDEX_H
+#define CORE_STORAGE_STORAGE_INDEX_H
+
+class StorageIndex {
+
+};
+
+#endif //CORE_STORAGE_STORAGE_INDEX_H
