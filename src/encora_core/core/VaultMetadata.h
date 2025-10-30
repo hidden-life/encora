@@ -19,7 +19,7 @@
  * The VMK itself is never stored here in plaintext.
  */
 struct VaultMetadata {
-    uint32_t version = 1;
+    uint32_t version = 2;
 
     std::uint64_t kdfOpsLimit = 0;
     std::uint64_t kdfMemLimit = 0;
@@ -27,6 +27,9 @@ struct VaultMetadata {
 
     std::vector<unsigned char> wrappedNonce; // AEAD nonce
     std::vector<unsigned char> wrappedCipherText; // AEAD ciphertext+MAC
+
+    // HMAC of metadata
+    std::vector<unsigned char> hmac;
 };
 
 #endif //CORE_VAULT_METADATA_H

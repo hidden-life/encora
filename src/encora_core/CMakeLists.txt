@@ -14,6 +14,7 @@ set(SOURCES
         core/secrets/KeyWrap.cpp
         core/utils/Logger.cpp
         core/utils/Base64.cpp
+        core/utils/HMAC.cpp
         storage/LocalEncryptedStorage.cpp
 
         VaultMetadataIO.cpp
@@ -29,6 +30,7 @@ set(HEADERS
         core/utils/Logger.h
         core/utils/Version.h
         core/utils/Base64.h
+        core/utils/HMAC.h
         storage/LocalEncryptedStorage.h
         storage/StorageBackend.h
         storage/StorageError.h

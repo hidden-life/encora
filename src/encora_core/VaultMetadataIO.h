@@ -13,10 +13,10 @@
 class VaultMetadataIO {
 public:
     // Load metadata from disk path. Throws on failure.
-    static VaultMetadata load(const std::string &path);
+    static VaultMetadata load(const std::string &path, const std::vector<unsigned char> &derived);
 
     // Save metadata to disk path. Overwrites existing file.
-    static void save(const std::string &path, const VaultMetadata &meta);
+    static void save(const std::string &path, const VaultMetadata &meta, const std::vector<unsigned char> &derived);
 };
 
 #endif //CORE_VAULT_METADATA_IO_H

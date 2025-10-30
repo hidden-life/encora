@@ -1,15 +1,18 @@
 #include <sodium.h>
 #include <vector>
+#include <filesystem>
+#include <nlohmann/json.hpp>
+#include <fstream>
 
 #include "VaultManager.h"
-
-#include <filesystem>
-
 #include "VaultMetadata.h"
 #include "VaultMetadataIO.h"
 #include "core/utils/Logger.h"
 #include "secrets/KeyDerivation.h"
 #include "secrets/KeyWrap.h"
+#include "utils/Base64.h"
+
+using json = nlohmann::json;
 
 VaultManager::VaultManager() : m_isUnlocked(false) {
     sodium_init(); // safe to call multiple times :)
@@ -27,18 +30,12 @@ bool VaultManager::init(const std::string &password) {
     }
 
     // Generate KDF parameters
-    KdfParams params = KeyDerivation::defaultParams();
+    const KdfParams params = KeyDerivation::defaultParams();
     // Generate random salt
     std::vector<unsigned char> salt(crypto_pwhash_SALTBYTES);
     randombytes_buf(salt.data(), salt.size());
     // Derive key from password
-    std::vector<unsigned char> derivedKey;
-    try {
-        derivedKey = KeyDerivation::derive(password, salt, params);
-    } catch (const std::exception &e) {
-        EncoraLogger::Logger::log(EncoraLogger::Level::Error, std::string("Key derivation failed.") + e.what());
-        return false;
-    }
+    const std::vector<unsigned char> derivedKey = KeyDerivation::derive(password, salt, params);
 
     // Generate VMK (Vault Master Key).
     std::vector<unsigned char> vmk(32);
@@ -49,17 +46,17 @@ bool VaultManager::init(const std::string &password) {
 
     // Prepare metadata
     VaultMetadata metadata;
-    metadata.version = 1;
+    metadata.version = 2;
     metadata.kdfOpsLimit = params.opsLimit;
     metadata.kdfMemLimit = params.memLimit;
     metadata.kdfSalt = salt;
     metadata.wrappedNonce = wrapped.nonce;
     metadata.wrappedCipherText = wrapped.cipherText;
 
-    // Save metadata
+    // Save metadata with HMAC
     try {
         std::filesystem::create_directories("data");
-        VaultMetadataIO::save(metaPath(), metadata);
+        VaultMetadataIO::save(metaPath(), metadata, derivedKey);
     } catch (const std::exception &e) {
         EncoraLogger::Logger::log(EncoraLogger::Level::Error, std::string("Failed to save vault meta: ") + e.what());
         return false;
@@ -72,36 +69,33 @@ bool VaultManager::init(const std::string &password) {
 bool VaultManager::unlock(const std::string &password) {
     EncoraLogger::Logger::log(EncoraLogger::Level::Info, "VaultManager::unlock: called.");
 
-    if (password.empty()) {
-        EncoraLogger::Logger::log(EncoraLogger::Level::Warn, "Cannot unlock vault: empty password.");
-        return false;
-    }
-
     VaultMetadata metadata;
+    std::vector<unsigned char> derived;
     try {
-        metadata = VaultMetadataIO::load(metaPath());
-    } catch (const std::exception &e) {
+        // Read first the file to extract KDF parameters.
+        json tmp;
+        std::ifstream ifs(metaPath());
+        if (!ifs.is_open()) {
+            throw std::runtime_error("Vault metadata not found.");
+        }
+
+        ifs >> tmp;
+        ifs.close();
+
+        unsigned long long ops = tmp.at("kdf_ops_limit").get<unsigned long long>();
+        unsigned long long mem = tmp.at("kdf_mem_limit").get<unsigned long long>();
+        std::vector<unsigned char> salt = Base64::decode(tmp.at("kdf_salt").get<std::string>());
+
+        KdfParams params {ops, static_cast<size_t>(mem)};
+        derived = KeyDerivation::derive(password, salt, params);
+        metadata = VaultMetadataIO::load(metaPath(), derived);
+    } catch (std::exception &e) {
         EncoraLogger::Logger::log(EncoraLogger::Level::Error, std::string("Failed to load vault metadata: ") + e.what());
         return false;
     }
 
-    const KdfParams params {
-        metadata.kdfOpsLimit,
-        static_cast<size_t>(metadata.kdfMemLimit),
-    };
-
-    std::vector<unsigned char> derived;
-    try {
-        derived = KeyDerivation::derive(password, metadata.kdfSalt, params);
-    } catch (const std::exception &e) {
-        EncoraLogger::Logger::log(EncoraLogger::Level::Error, std::string("Key derivation failed: ") + e.what());
-        return false;
-    }
-
-    WrappedKey wrapped;
-    wrapped.nonce = metadata.wrappedNonce;
-    wrapped.cipherText = metadata.wrappedCipherText;
-
+    // Now we need to unwrap VMK
+    WrappedKey wrapped {metadata.wrappedNonce, metadata.wrappedCipherText};
     try {
         m_vmk = KeyWrap::unwrap(wrapped, derived);
     } catch (const std::exception &e) {
@@ -110,8 +104,8 @@ bool VaultManager::unlock(const std::string &password) {
     }
 
     m_isUnlocked = true;
-    EncoraLogger::Logger::log(EncoraLogger::Level::Info, "Vault unlocked successfully.");
 
+    EncoraLogger::Logger::log(EncoraLogger::Level::Info, "Vault unlocked successfully.");
     return true;
 }
 
