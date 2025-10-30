@@ -23,6 +23,8 @@ include(cmake/ConfigCompilerWarnings.cmake)
 include(cmake/ConfigStaticAnalysis.cmake OPTIONAL)
 # Install libsodium
 include(cmake/FindLibsodium.cmake)
+# Install nlohmann::json
+include(cmake/FindNlohmannJson.cmake)
 
 # Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

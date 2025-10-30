@@ -26,8 +26,8 @@ namespace EncoraLogger {
         static void log(Level level, const std::string &msg);
 
     private:
-        static std::shared_ptr<spdlog::logger> m_logger;
-        static bool m_isInitialized;
+        static inline std::shared_ptr<spdlog::logger> m_logger;
+        static inline bool m_isInitialized;
     };
 }
 

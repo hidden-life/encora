@@ -45,6 +45,7 @@ target_include_directories(encora_core PUBLIC
 target_link_libraries(encora_core PUBLIC
         spdlog::spdlog
         sodium
+        nlohmann_json::nlohmann_json
 )
 
 # Platform-specific defines

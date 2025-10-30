@@ -1,8 +1,8 @@
 add_executable(encora_cli
         main_cli.cpp
 
-        CLI.cpp
         CLIOptions.cpp
+        CLIOptions.h
 )
 
 target_include_directories(encora_cli PRIVATE
@@ -13,3 +13,5 @@ target_include_directories(encora_cli PRIVATE
 target_link_libraries(encora_cli PRIVATE encora_core)
 
 encora_set_common_warnings(encora_cli)
+
+set_target_properties(encora_cli PROPERTIES WIN32_EXECUTABLE FALSE)
