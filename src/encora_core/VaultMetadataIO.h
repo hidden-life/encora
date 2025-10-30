@@ -6,11 +6,9 @@
 /**
  * VaultMetadataIO
  *
- * Responsible for saving and loading vault metadata from disk.
+ * Responsible for saving and loading vault metadata from disk in JSON format using nlohmann::json.
  *
- * NOTE:
- *      - For now, implementation will be a stub and will not actually write a file. It defines and interface.
- *      - Later we will implement real JSON-based save/load.
+ * Binary fields (salt, nonce, ciphertext) are Base64-encoded.
  */
 class VaultMetadataIO {
 public:

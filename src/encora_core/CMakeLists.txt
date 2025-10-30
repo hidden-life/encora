@@ -13,6 +13,7 @@ set(SOURCES
         core/secrets/KeyDerivation.cpp
         core/secrets/KeyWrap.cpp
         core/utils/Logger.cpp
+        core/utils/Base64.cpp
         storage/LocalEncryptedStorage.cpp
 
         VaultMetadataIO.cpp
@@ -27,6 +28,7 @@ set(HEADERS
         core/secrets/SecureWiper.h
         core/utils/Logger.h
         core/utils/Version.h
+        core/utils/Base64.h
         storage/LocalEncryptedStorage.h
         storage/StorageBackend.h
         storage/StorageError.h
