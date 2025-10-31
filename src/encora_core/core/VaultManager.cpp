@@ -130,6 +130,14 @@ std::optional<std::string> VaultManager::debugStatus() const {
     return std::nullopt;
 }
 
+std::vector<unsigned char> VaultManager::sessionVMK() const {
+    if (!m_isUnlocked) {
+        return {};
+    }
+
+    return m_vmk;
+}
+
 std::string VaultManager::metaPath() const {
     // Later it will be platform-specific.
     return "data/vault.meta";

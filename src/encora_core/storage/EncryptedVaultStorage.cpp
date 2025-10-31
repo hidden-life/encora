@@ -9,6 +9,37 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
+static bool rewrite(const std::string &name) {
+    std::ifstream ifs("data/vault_store/index.json");
+    if (!ifs.is_open()) {
+        return true;
+    }
+
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(ifs, line)) {
+        if (line.empty()) continue;
+        json j = json::parse(line, nullptr, false);
+        if (j.is_discarded()) continue;
+        if (j.value("name", "") != name) {
+            lines.push_back(line);
+        }
+    }
+
+    ifs.close();
+
+    std::ofstream ofs("data/vault_store/index.json", std::ios::trunc);
+    if (!ofs.is_open()) {
+        return false;
+    }
+
+    for (auto &l : lines) {
+        ofs << l << "\n";
+    }
+
+    return true;
+}
+
 EncryptedVaultStorage::EncryptedVaultStorage(const std::vector<unsigned char> &vmk) : m_vmk(vmk) {
     ensureStorageDir();
 }
@@ -18,7 +49,7 @@ void EncryptedVaultStorage::ensureStorageDir() const {
 }
 
 std::string EncryptedVaultStorage::path(const std::string &id) const {
-    return "data/vault_store/record_i" + id + ".bin";
+    return "data/vault_store/record_" + id + ".bin";
 }
 
 bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string &type, std::vector<unsigned char> &data) {
@@ -43,6 +74,11 @@ bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string
 
     std::string id = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
     std::ofstream ofs(path(id), std::ios::binary);
+    if (!ofs.is_open()) {
+        throw std::runtime_error("Cannot open record file for write.");
+    }
+
+    rewrite(name);
     ofs.write((char*)nonce.data(), nonce.size());
     ofs.write((char*)cipherText.data(), cipherText.size());
     ofs.close();
@@ -55,6 +91,9 @@ bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string
     };
 
     std::ofstream idx("data/vault_store/index.json", std::ios::app);
+    if (!idx.is_open()) {
+        throw std::runtime_error("Cannot open index for append.");
+    }
     idx << j.dump() << std::endl;
 
     return true;
@@ -62,11 +101,16 @@ bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string
 
 std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &name) {
     std::ifstream idx("data/vault_store/index.json");
+    if (!idx.is_open()) {
+        throw std::runtime_error("Index file not found.");
+    }
     std::string line;
     std::string id;
 
     while (std::getline(idx, line)) {
-        auto j = json::parse(line);
+        if (line.empty()) continue;
+        auto j = json::parse(line, nullptr, false);
+        if (j.is_discarded()) continue;
         if (j["name"] == name) {
             id = j["id"];
             break;
@@ -78,6 +122,16 @@ std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &
     }
 
     std::ifstream ifs(path(id), std::ios::binary);
+    ifs.seekg(0, std::ios::end);
+    const auto sz = ifs.tellg();
+    ifs.seekg(0);
+    if (sz < crypto_aead_xchacha20poly1305_ietf_NPUBBYTES) {
+        throw std::runtime_error("Record file corrupted: too small.");
+    }
+
+    if (!ifs.is_open()) {
+        throw std::runtime_error("Record file not found.");
+    }
     std::vector<unsigned char> nonce(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
     ifs.read((char*)nonce.data(), nonce.size());
 
@@ -105,3 +159,4 @@ std::vector<std::string> EncryptedVaultStorage::list() const {
 
     return records;
 }
+

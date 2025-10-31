@@ -35,6 +35,9 @@ public:
     bool isUnlocked() const;
     [[nodiscard]]
     std::optional<std::string> debugStatus() const;
+    // Returns copy of VMK (COPY!), if vault in unlocked.
+    [[nodiscard]]
+    std::vector<unsigned char> sessionVMK() const;
 
 private:
     bool m_isUnlocked;
