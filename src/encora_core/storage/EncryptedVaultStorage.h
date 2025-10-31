@@ -13,6 +13,8 @@ public:
     std::vector<unsigned char> loadRecord(const std::string &name);
     // List of all records
     std::vector<std::string> list() const;
+    // Remove record
+    bool remove(const std::string &name);
 
 private:
     std::vector<unsigned char> m_vmk;

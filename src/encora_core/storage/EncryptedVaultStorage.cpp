@@ -9,6 +9,19 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
+static inline void strip_cr(std::string& str) {
+    str.erase(std::remove(str.begin(), str.end(), '\r'), str.end());
+}
+
+static inline bool safeParseLine(const std::string &line, json &out) {
+    if (line.empty()) return false;
+    auto j = json::parse(line, nullptr, false);
+    if (j.is_discarded()) return false;
+    out = std::move(j);
+
+    return true;
+}
+
 static bool rewrite(const std::string &name) {
     std::ifstream ifs("data/vault_store/index.json");
     if (!ifs.is_open()) {
@@ -108,39 +121,54 @@ std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &
     std::string id;
 
     while (std::getline(idx, line)) {
-        if (line.empty()) continue;
-        auto j = json::parse(line, nullptr, false);
-        if (j.is_discarded()) continue;
-        if (j["name"] == name) {
-            id = j["id"];
+        strip_cr(line);
+        json j;
+        if (!safeParseLine(line, j)) continue;
+
+        // Safely read name and compare
+        const auto n = j.value("name", std::string{});
+        if (n == name) {
+            id = j.value("id", std::string{});
             break;
         }
     }
+
+    idx.close();
 
     if (id.empty()) {
         throw std::runtime_error("Record does not exist.");
     }
 
     std::ifstream ifs(path(id), std::ios::binary);
+    if (!ifs.is_open()) {
+        throw std::runtime_error("Cannot open record file. Not found: " + path(id));
+    }
+
     ifs.seekg(0, std::ios::end);
-    const auto sz = ifs.tellg();
+    const auto sz = static_cast<size_t>(ifs.tellg());
     ifs.seekg(0);
     if (sz < crypto_aead_xchacha20poly1305_ietf_NPUBBYTES) {
         throw std::runtime_error("Record file corrupted: too small.");
     }
 
-    if (!ifs.is_open()) {
-        throw std::runtime_error("Record file not found.");
-    }
     std::vector<unsigned char> nonce(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-    ifs.read((char*)nonce.data(), nonce.size());
-
+    ifs.read(reinterpret_cast<char*>(nonce.data()), nonce.size());
     std::vector<unsigned char> cipherText((std::istreambuf_iterator<char>(ifs)), {});
     ifs.close();
 
     std::vector<unsigned char> decrypted(cipherText.size());
-    unsigned long long decryptedLength;
-    if (crypto_aead_xchacha20poly1305_ietf_decrypt(decrypted.data(), &decryptedLength, nullptr, cipherText.data(), cipherText.size(), nullptr, 0 , nonce.data(), m_vmk.data()) != 0) {
+    unsigned long long decryptedLength = 0;
+    if (crypto_aead_xchacha20poly1305_ietf_decrypt(
+        decrypted.data(),
+        &decryptedLength,
+        nullptr,
+        cipherText.data(),
+        cipherText.size(),
+        nullptr,
+        0 ,
+        nonce.data(),
+        m_vmk.data()
+        ) != 0) {
         throw std::runtime_error("Failed to decrypt record.");
     }
 
@@ -149,14 +177,64 @@ std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &
 }
 
 std::vector<std::string> EncryptedVaultStorage::list() const {
-    std::ifstream idx("data/vault_store/index.json");
-    std::string line;
     std::vector<std::string> records;
+    std::ifstream idx("data/vault_store/index.json");
+    if (!idx.is_open()) return records;
+    std::string line;
     while (std::getline(idx, line)) {
-        auto j = json::parse(line);
-        records.push_back(j["name"]);
+        strip_cr(line);
+        json j;
+        if (!safeParseLine(line, j)) continue;
+
+        // There is no name or be as string
+        if (j.contains("name") && j["name"].is_string()) {
+            records.push_back(j["name"].get<std::string>());
+        }
     }
 
     return records;
+}
+
+bool EncryptedVaultStorage::remove(const std::string &name) {
+    const std::string idxPath = "data/vault_store/index.json";
+    std::ifstream idx(idxPath);
+    if (!idx.is_open()) {
+        throw std::runtime_error("Index file not found.");
+    }
+
+    std::vector<json> records;
+    std::string line;
+    std::string targetId;
+    while (std::getline(idx, line)) {
+        if (line.empty()) continue;
+        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+        auto j = json::parse(line);
+        if (j["name"] == name) {
+            targetId = j["id"];
+            continue; // skip to delete
+        }
+        records.push_back(j);
+    }
+
+    idx.close();
+
+    if (targetId.empty()) {
+        throw std::runtime_error("Record does not exist: " + name);
+    }
+
+    // Delete corresponding encrypted file
+    std::string recordPath = path(targetId);
+    if (fs::exists(recordPath)) {
+        fs::remove(recordPath);
+    }
+
+    // Remove index.json without deleted record
+    std::ofstream idxOut(idxPath, std::ios::trunc);
+    for (const auto &rec : records) {
+        idxOut << rec.dump() << std::endl;
+    }
+    idxOut.close();
+
+    return true;
 }
 

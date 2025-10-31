@@ -86,10 +86,9 @@ int main(int argc, char *argv[]) {
                 exitCode = EXIT_FAILURE;
             } else {
                 EncryptedVaultStorage storage(vault.sessionVMK());
-                auto bytes = storage.loadRecord(opts.name);
-                // For text notes it's fine to print; for binary, redirect output to file
-                const std::string out(bytes.begin(), bytes.end());
-                std::cout << out << "\n";
+                for (const auto &rec : storage.list()) {
+                    std::cout << " * " << rec << "\n";
+                }
             }
         } else if (opts.command == "add") {
             if (opts.password.empty() || opts.name.empty() || opts.type.empty()) {
@@ -138,7 +137,15 @@ int main(int argc, char *argv[]) {
                 std::cout << "Unlock failed.\n";
                 exitCode = EXIT_FAILURE;
             } else {
-                std::cout << "Remove is not implemented yet.\n";
+                try {
+                    EncryptedVaultStorage storage(vault.sessionVMK());
+                    if (storage.remove(opts.name)) {
+                        std::cout << "Removed successfully: " << opts.name << "\n";
+                    }
+                } catch (const std::exception &e) {
+                    std::cout << "Remove failed: " << e.what() << "\n";
+                    exitCode = EXIT_FAILURE;
+                }
             }
         } else {
             usage();
