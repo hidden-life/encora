@@ -11,6 +11,7 @@
 #include "CLIOptions.h"
 #include "VaultManager.h"
 #include "storage/EncryptedVaultStorage.h"
+#include "storage/VaultExporter.h"
 #include "utils/Logger.h"
 
 /**
@@ -73,6 +74,25 @@ int main(int argc, char *argv[]) {
                 usage();
             } else if (vault.unlock(opts.password)) {
                 std::cout << "Vault unlocked successfully.\n";
+                switch (vault.integrityStatus()) {
+                    case IntegrityStatus::OK:
+                        std::cout << "Integrity: OK.\n";
+                        break;
+                    case IntegrityStatus::MissingManifest:
+                        std::cout << "Integrity: manifest missing (no MANIFEST.* in data).\n";
+                        break;
+                    case IntegrityStatus::HMACMismatch:
+                        std::cout << "WARNING: Integrity HMAC mismatch!\n";
+                        break;
+                    case IntegrityStatus::HashMismatch:
+                        std::cout << "WARNING: Integrity file hash mismatch!\n";
+                        break;
+                    case IntegrityStatus::Error:
+                        std::cout << "Integrity check error (see log). \n";
+                        break;
+                    default:
+                        break;
+                }
             } else {
                 std::cout << "Failed to unlock vault (wrong password or corrupted vault).\n";
                 exitCode = EXIT_FAILURE;
@@ -144,6 +164,35 @@ int main(int argc, char *argv[]) {
                     }
                 } catch (const std::exception &e) {
                     std::cout << "Remove failed: " << e.what() << "\n";
+                    exitCode = EXIT_FAILURE;
+                }
+            }
+        } else if (opts.command == "export") {
+            if (opts.password.empty() || opts.path.empty()) {
+                std::cout << "Error: password and destination path are required.\n";
+                usage();
+            } else if (!vault.unlock(opts.password)) {
+                std::cout << "Unlock failed.\n";
+                exitCode = EXIT_FAILURE;
+            } else {
+                std::string err;
+                if (VaultExporter::out(opts.path, vault.sessionVMK(), err)) {
+                    std::cout << "Exported to: " << opts.path << "\n";
+                } else {
+                    std::cout << "Export failed.\n";
+                    exitCode = EXIT_FAILURE;
+                }
+            }
+        } else if (opts.command == "import") {
+            if (opts.password.empty() || opts.path.empty()) {
+                std::cout << "Error: password and source path are required.\n";
+                usage();
+            } else {
+                std::string err;
+                if (VaultExporter::in(opts.path, {}, err)) {
+                    std::cout << "Imported from: " << opts.path << "\n";
+                } else {
+                    std::cout << "Import failed.\n";
                     exitCode = EXIT_FAILURE;
                 }
             }

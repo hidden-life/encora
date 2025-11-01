@@ -10,6 +10,7 @@
 #include "core/utils/Logger.h"
 #include "secrets/KeyDerivation.h"
 #include "secrets/KeyWrap.h"
+#include "security/ManifestWriter.h"
 #include "utils/Base64.h"
 
 using json = nlohmann::json;
@@ -62,6 +63,15 @@ bool VaultManager::init(const std::string &password) {
         return false;
     }
 
+    try {
+        std::string err;
+        if (!ManifestWriter::update("data", vmk, err)) {
+            EncoraLogger::Logger::log(EncoraLogger::Level::Error, std::string("Manifest update failed: " + err));
+        }
+    } catch (...) {
+        EncoraLogger::Logger::log(EncoraLogger::Level::Warn, "Manifest initialization skipped.");
+    }
+
     EncoraLogger::Logger::log(EncoraLogger::Level::Info, "Vault initialized successfully.");
     return true;
 }
@@ -103,7 +113,36 @@ bool VaultManager::unlock(const std::string &password) {
         return false;
     }
 
+    if (!std::filesystem::exists("data/MANIFEST.json")) {
+        std::string err;
+        ManifestWriter::update("data", m_vmk, err);
+    }
+
     m_isUnlocked = true;
+    // After VMK is available, verify integrity (if manifest present).
+    {
+        auto r = IntegrityChecker::verify("data", m_vmk);
+        m_integrityStatus = r.status;
+        switch (r.status) {
+            case IntegrityStatus::OK:
+                EncoraLogger::Logger::log(EncoraLogger::Level::Info, "Integrity: OK. " + r.message);
+                break;
+            case IntegrityStatus::MissingManifest:
+                EncoraLogger::Logger::log(EncoraLogger::Level::Warn, "Integrity: missing manifest. " + r.message);
+                break;
+            case IntegrityStatus::HMACMismatch:
+                EncoraLogger::Logger::log(EncoraLogger::Level::Error, "Integrity: HMAC mismatch. " + r.message);
+                break;
+            case IntegrityStatus::HashMismatch:
+                EncoraLogger::Logger::log(EncoraLogger::Level::Error, "Integrity: hash mismatch. " + r.message);
+                break;
+            case IntegrityStatus::Error:
+                EncoraLogger::Logger::log(EncoraLogger::Level::Error, "Integrity: error. " + r.message);
+                break;
+            default:
+                break;
+        }
+    }
 
     EncoraLogger::Logger::log(EncoraLogger::Level::Info, "Vault unlocked successfully.");
     return true;

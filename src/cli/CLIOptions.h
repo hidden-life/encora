@@ -18,6 +18,8 @@
  *      list <password>
  *      get <password> <name>
  *      remove <password> <name>
+ *      export <password> <path>
+ *      import <password> <path>
  */
 class CLIOptions {
 public:
@@ -28,6 +30,7 @@ public:
     std::string password;
     std::string name;
     std::string type;
+    std::string path; // for export/import
 
     bool m_useStdin = false;
     std::string dataFIle;

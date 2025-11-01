@@ -5,6 +5,8 @@
 #include <optional>
 #include <vector>
 
+#include "security/IntegrityChecker.h"
+
 /**
  * VaultManager
  *
@@ -38,10 +40,13 @@ public:
     // Returns copy of VMK (COPY!), if vault in unlocked.
     [[nodiscard]]
     std::vector<unsigned char> sessionVMK() const;
+    [[nodiscard]]
+    IntegrityStatus integrityStatus() const { return m_integrityStatus; }
 
 private:
     bool m_isUnlocked;
     std::vector<unsigned char> m_vmk;
+    IntegrityStatus m_integrityStatus = IntegrityStatus::Unknown;
     // Path to metadata file (for new hardcoded)
     [[nodiscard]]
     std::string metaPath() const;

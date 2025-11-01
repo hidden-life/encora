@@ -18,6 +18,10 @@ set(SOURCES
         storage/LocalEncryptedStorage.cpp
         storage/StorageIndex.cpp
         storage/EncryptedVaultStorage.cpp
+        storage/VaultExporter.cpp
+
+        security/IntegrityChecker.cpp
+        security/ManifestWriter.cpp
 
         VaultMetadataIO.cpp
 )
@@ -39,6 +43,10 @@ set(HEADERS
         storage/StorageIndex.h
         storage/StorageRecord.h
         storage/EncryptedVaultStorage.h
+        storage/VaultExporter.h
+
+        security/IntegrityChecker.h
+        security/ManifestWriter.h
 
         VaultMetadataIO.h
 )

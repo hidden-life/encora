@@ -4,10 +4,34 @@
 #include <nlohmann/json.hpp>
 
 #include "EncryptedVaultStorage.h"
+
+#include "security/ManifestWriter.h"
 #include "utils/Base64.h"
+#include "utils/Logger.h"
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+static std::vector<unsigned char> hmacSha256Bytes(
+    const std::vector<unsigned char> &key,
+    const std::vector<unsigned char> &prefix,
+    const std::vector<unsigned char> &tail
+    ) {
+    std::vector<unsigned char> mac(crypto_auth_hmacsha256_BYTES);
+    crypto_auth_hmacsha256_state state;
+    crypto_auth_hmacsha256_init(&state, key.data(), key.size());
+    if (!prefix.empty()) {
+        crypto_auth_hmacsha256_update(&state, prefix.data(), prefix.size());
+    }
+
+    if (!tail.empty()) {
+        crypto_auth_hmacsha256_update(&state, tail.data(), tail.size());
+    }
+
+    crypto_auth_hmacsha256_final(&state, mac.data());
+
+    return mac;
+}
 
 static inline void strip_cr(std::string& str) {
     str.erase(std::remove(str.begin(), str.end(), '\r'), str.end());
@@ -61,17 +85,35 @@ void EncryptedVaultStorage::ensureStorageDir() const {
     fs::create_directories("data/vault_store");
 }
 
+std::vector<unsigned char> EncryptedVaultStorage::deriveRecordKey(const std::vector<unsigned char> &vmk,
+    const std::vector<unsigned char> &salt) {
+}
+
+std::string EncryptedVaultStorage::base64Encode(const std::vector<unsigned char> &data) {
+    return Base64::encode(data);
+}
+
+std::vector<unsigned char> EncryptedVaultStorage::base64Decode(const std::string &data) {
+    return Base64::decode(data);
+}
+
 std::string EncryptedVaultStorage::path(const std::string &id) const {
     return "data/vault_store/record_" + id + ".bin";
 }
 
 bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string &type, std::vector<unsigned char> &data) {
+    // 1. Generate per-record salt.
+    std::vector<unsigned char> salt(32);
+    randombytes_buf(salt.data(), salt.size());
+    // 2. Derive record key from VMK + salt.
+    auto recordKey = deriveRecordKey(m_vmk, salt);
+    // 3. Encrypt with XChaCha20-Poly1305 (unique nonce per record)
     std::vector<unsigned char> nonce(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
     randombytes_buf(nonce.data(), nonce.size());
 
     std::vector<unsigned char> cipherText(data.size() + crypto_aead_xchacha20poly1305_ietf_ABYTES);
-    unsigned long long cipherTextLength;
-    crypto_aead_xchacha20poly1305_ietf_encrypt(
+    unsigned long long cipherTextLength = 0;
+    if (crypto_aead_xchacha20poly1305_ietf_encrypt(
         cipherText.data(),
         &cipherTextLength,
         data.data(),
@@ -80,11 +122,14 @@ bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string
         0,
         nullptr,
         nonce.data(),
-        m_vmk.data()
-        );
+        recordKey.data()
+        )) {
+        throw std::runtime_error("AddRecord: encryption failed.");
+    }
 
     cipherText.resize(cipherTextLength);
 
+    // 4. Persist record
     std::string id = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
     std::ofstream ofs(path(id), std::ios::binary);
     if (!ofs.is_open()) {
@@ -96,11 +141,13 @@ bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string
     ofs.write((char*)cipherText.data(), cipherText.size());
     ofs.close();
 
+    // 5. Append to index.json (JSON lines), include base64 salt
     json j = {
         {"id", id},
         {"name", name},
         {"type", type},
-        {"created_at", std::time(nullptr)}
+        {"created_at", std::time(nullptr)},
+        {"salt_b64", base64Encode(recordKey)}
     };
 
     std::ofstream idx("data/vault_store/index.json", std::ios::app);
@@ -108,6 +155,17 @@ bool EncryptedVaultStorage::addRecord(const std::string &name, const std::string
         throw std::runtime_error("Cannot open index for append.");
     }
     idx << j.dump() << std::endl;
+
+    // 6. Update manifest (integrity) - important!
+    try {
+        std::string err;
+        // VMK available while vault is unlocked.
+        if (!ManifestWriter::update("data", m_vmk, err)) {
+            EncoraLogger::Logger::log(EncoraLogger::Level::Warn, "Manifest update after add failed: " + err);
+        }
+    } catch (...) {
+        // dont failt the add if manifest update fails - just log
+    }
 
     return true;
 }
@@ -119,6 +177,7 @@ std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &
     }
     std::string line;
     std::string id;
+    std::vector<unsigned char> recordSalt;
 
     while (std::getline(idx, line)) {
         strip_cr(line);
@@ -126,9 +185,14 @@ std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &
         if (!safeParseLine(line, j)) continue;
 
         // Safely read name and compare
-        const auto n = j.value("name", std::string{});
-        if (n == name) {
+        if (const auto n = j.value("name", std::string{}); n == name) {
             id = j.value("id", std::string{});
+            if (j.contains("salt_b64")) {
+                recordSalt = base64Decode(j.value("salt_b64", std::string{}));
+            } else {
+                // backward compatibility: if old record (no salt), treat as error
+                throw std::runtime_error("Record has no salt (old format).");
+            }
             break;
         }
     }
@@ -139,6 +203,9 @@ std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &
         throw std::runtime_error("Record does not exist.");
     }
 
+    // Derive record key
+    auto recordKey = deriveRecordKey(m_vmk, recordSalt);
+    // Open record file
     std::ifstream ifs(path(id), std::ios::binary);
     if (!ifs.is_open()) {
         throw std::runtime_error("Cannot open record file. Not found: " + path(id));
@@ -167,7 +234,7 @@ std::vector<unsigned char> EncryptedVaultStorage::loadRecord(const std::string &
         nullptr,
         0 ,
         nonce.data(),
-        m_vmk.data()
+        recordKey.data()
         ) != 0) {
         throw std::runtime_error("Failed to decrypt record.");
     }
@@ -196,6 +263,7 @@ std::vector<std::string> EncryptedVaultStorage::list() const {
 }
 
 bool EncryptedVaultStorage::remove(const std::string &name) {
+    // 1. Read all lines, find record by name
     const std::string idxPath = "data/vault_store/index.json";
     std::ifstream idx(idxPath);
     if (!idx.is_open()) {
@@ -222,18 +290,32 @@ bool EncryptedVaultStorage::remove(const std::string &name) {
         throw std::runtime_error("Record does not exist: " + name);
     }
 
-    // Delete corresponding encrypted file
-    std::string recordPath = path(targetId);
-    if (fs::exists(recordPath)) {
+    // 2. Rewrite index.json
+    {
+        std::ofstream idxOut("data/vault_store/index.json", std::ios::binary | std::ios::trunc);
+        for (auto &l : records) {
+            idxOut << l << "\n";
+        }
+    }
+
+    // 3. Delete corresponding encrypted file
+    if (std::string recordPath = path(targetId); fs::exists(recordPath)) {
         fs::remove(recordPath);
     }
 
-    // Remove index.json without deleted record
-    std::ofstream idxOut(idxPath, std::ios::trunc);
-    for (const auto &rec : records) {
-        idxOut << rec.dump() << std::endl;
+    try {
+        // // Remove index.json without deleted record
+        // std::ofstream idxOut(idxPath, std::ios::trunc);
+        // for (const auto &rec : records) {
+        //     idxOut << rec.dump() << std::endl;
+        // }
+        // idxOut.close();
+        std::string err;
+        if (!ManifestWriter::update("data", m_vmk, err)) {
+            EncoraLogger::Logger::log(EncoraLogger::Level::Warn, "Manifest update after remove failed: " + err);
+        }
+    } catch (...) {
     }
-    idxOut.close();
 
     return true;
 }

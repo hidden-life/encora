@@ -75,6 +75,11 @@ CLIOptions::CLIOptions(int argc, char *argv[]) {
             if (args.size() >= 1) {
                 password = args[0];
             }
+        } else if (command == "export" || command == "import") {
+            if (args.size() >= 2) {
+                password = args[0];
+                path = args[1];
+            }
         } else {
             std::cout << "Usage:\n"
                          "  - encora_cli init <password>\n"
